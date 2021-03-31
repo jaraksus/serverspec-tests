@@ -1,0 +1,54 @@
+Vagrant.configure("2") do |config|
+  
+	config.vm.box = "ubuntu/focal64"
+  
+	config.vm.provider "virtualbox" do |vb|
+		vb.gui = false
+		vb.memory = "1024"
+	end
+	
+	salt_root = "../salt"
+    config.vm.provision :salt do |salt|
+		salt.masterless = false
+		salt.run_highstate = false
+		config.ssh.pty = false
+	end
+
+	config.vm.define "admin", primary: true do |admin|
+		admin.vm.synced_folder "#{salt_root}/state", "/srv/salt"
+		admin.vm.network "private_network", ip: "192.168.50.10"
+
+		admin.vm.provision :salt do |saltmaster|
+			saltmaster.install_master = true
+			saltmaster.minion_config = "#{salt_root}/config/minion1"
+			saltmaster.master_config = "#{salt_root}/config/master"
+			saltmaster.minion_key = "#{salt_root}/keys/master/master.pem"
+			saltmaster.minion_pub = "#{salt_root}/keys/master/master.pub"
+			saltmaster.master_key = "#{salt_root}/keys/master/master.pem"
+			saltmaster.master_pub = "#{salt_root}/keys/master/master.pub"
+			saltmaster.seed_master = {
+				minion1: "#{salt_root}/keys/master/master.pub",
+				minion2: "#{salt_root}/keys/minion/minion.pub"
+			}
+			saltmaster.install_type = "stable"
+			saltmaster.verbose = true
+			saltmaster.colorize = true
+			saltmaster.bootstrap_options = "-F -P -c /tmp"
+		end
+	end
+
+	config.vm.define "dev" do |dev|
+		# dev.vm.synced_folder "#{salt_root}/state", "/srv/salt"
+		dev.vm.network "private_network", ip: "192.168.50.20"
+
+		dev.vm.provision :salt do |saltminion|
+			saltminion.minion_config = "#{salt_root}/config/minion2"
+			saltminion.minion_key = "#{salt_root}/keys/minion/minion.pem"
+			saltminion.minion_pub = "#{salt_root}/keys/minion/minion.pub"
+			saltminion.install_type = "stable"
+			saltminion.verbose = true
+			saltminion.colorize = true
+			saltminion.bootstrap_options = "-F -P -c /tmp"
+		end
+	end
+end
